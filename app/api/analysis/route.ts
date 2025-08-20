@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
         }
       };
 
-      const defaultResult = `${pair} ${timeframe} ${execError} 周期分析结果：
+      const defaultResult = `${pair} ${timeframe} 周期分析结果：
 - 当前价格：模拟数据
 - 24h涨跌：+2.34%
 - 技术分析：${mockResults[pair as keyof typeof mockResults]?.[timeframe as keyof typeof mockResults['BTCUSDT']] || '数据分析中...'}
