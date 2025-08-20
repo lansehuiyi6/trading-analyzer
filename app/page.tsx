@@ -319,7 +319,7 @@ export default function TradingAnalysis() {
             <div 
               className="space-y-4 overflow-y-auto"
               style={{
-                maxHeight: 'calc(100vh - 500px)',
+                maxHeight: 'calc(100vh - 300px)',
                 minHeight: '100px',
                 scrollbarWidth: 'thin',
                 scrollbarColor: 'rgba(255,255,255,0.2) transparent',
@@ -341,9 +341,9 @@ export default function TradingAnalysis() {
                     </div>
                     <span className="text-xs sm:text-sm text-gray-300">{result.timestamp}</span>
                   </div>
-                  <pre className="text-sm text-gray-100 whitespace-pre-wrap font-mono bg-black/20 p-3 rounded max-h-40 overflow-y-auto">
+                  <div className="text-sm text-gray-100 whitespace-pre-wrap font-mono bg-black/20 p-3 rounded overflow-y-auto">
                     {result.result}
-                  </pre>
+                  </div>
                 </div>
               ))}
             </div>
