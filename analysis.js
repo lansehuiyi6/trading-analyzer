@@ -13,7 +13,7 @@ if (!pair || !timeframe) {
 //   process.exit(1);
 }
 
-const axios = require('axios');
+const axios = require('axios').default;
 const technicalindicators = require('technicalindicators');
 
 // 定义常量和配置
