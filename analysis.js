@@ -16,7 +16,17 @@ if (!pair || !timeframe) {
 // Import technicalindicators only
 import * as technicalindicators from 'technicalindicators';
 
-// Axios will be imported dynamically on the server side
+// 创建一个获取axios的函数，兼容服务器和浏览器环境
+async function getAxios() {
+  if (typeof window === 'undefined') {
+    // 服务器端
+    const axios = await import('axios');
+    return axios.default;
+  } else {
+    // 浏览器端
+    return window.axios;
+  }
+}
 
 // 定义常量和配置
 const BINANCE_KLINE_API_URL = 'https://fapi.binance.com/fapi/v1/klines'; // 期货API，用于合约交易
@@ -485,11 +495,7 @@ function analyzeReversalPatterns(data, currentTrend) {
 
 // Main analysis function
 export async function runAnalysis(symbol = 'BTCUSDT', interval = '15m') {
-    if (typeof window === 'undefined') {
-        // Server-side: ensure axios is available
-        const axios = (await import('axios')).default;
-        global.axios = axios;
-    }
+    // Axios is now handled by getAxios() function
 
     // Set global variables for compatibility
     global.SYMBOL = symbol;
@@ -509,7 +515,7 @@ export async function runAnalysis(symbol = 'BTCUSDT', interval = '15m') {
 
             try {
                 // 并行获取K线数据和资金费率
-                const axios = global.axios || (await import('axios')).default;
+                const axios = await getAxios();
                 [klineResponse, fundingRateResponse] = await Promise.all([
                     axios.get(BINANCE_KLINE_API_URL, {
                         params: {
@@ -548,7 +554,8 @@ export async function runAnalysis(symbol = 'BTCUSDT', interval = '15m') {
             const latestVolume = volumes[volumes.length - 1];
 
             // 使用Binance的24hr ticker API获取精确24h变化
-            const tickerResponse = await axios.get('https://fapi.binance.com/fapi/v1/ticker/24hr', {
+            const tickerAxios = await getAxios();
+            const tickerResponse = await tickerAxios.get('https://fapi.binance.com/fapi/v1/ticker/24hr', {
                 params: { symbol: symbol }
             });
             const last24hChange = parseFloat(tickerResponse.data.priceChangePercent);
@@ -663,7 +670,8 @@ export async function runAnalysis(symbol = 'BTCUSDT', interval = '15m') {
             }
 
             // 动态计算支撑和压力位 (使用前一天的日K线)
-            const dailyKlineResponse = await axios.get(BINANCE_KLINE_API_URL, {
+            const dailyAxios = await getAxios();
+            const dailyKlineResponse = await dailyAxios.get(BINANCE_KLINE_API_URL, {
                 params: {
                     symbol: symbol,
                     interval: '1d',
@@ -914,7 +922,7 @@ export async function runAnalysis(symbol = 'BTCUSDT', interval = '15m') {
 
             console.log(`\n--- 分析结果 ---`);
             console.log(`综合信号评分：${signalScore.toFixed(2)}分`);
-            reversalAnalysis.signals.forEach(s => console.log(` - ${s}`));
+            signals.forEach(s => console.log(` - ${s}`));
             console.log(`方向：${direction}`);
             console.log(`入场时机：${entryStrategy}`);
 
