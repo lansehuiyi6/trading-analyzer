@@ -13,8 +13,11 @@ if (!pair || !timeframe) {
 //   process.exit(1);
 }
 
-const axios = require('axios').default;
-const technicalindicators = require('technicalindicators');
+// const axios = require('axios').default;
+// const technicalindicators = require('technicalindicators');
+
+import axios from 'axios';
+import * as technicalindicators from 'technicalindicators';
 
 // 定义常量和配置
 const BINANCE_KLINE_API_URL = 'https://fapi.binance.com/fapi/v1/klines'; // 期货API，用于合约交易

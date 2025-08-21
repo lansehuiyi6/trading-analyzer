@@ -2,14 +2,12 @@
   "name": "nextjs",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
-  },
-  "_moduleAliases": {
-    "axios": "./node_modules/axios"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
@@ -19,7 +17,6 @@
     "autoprefixer": "10.4.15",
     "axios": "^1.11.0",
     "eslint": "8.49.0",
-    "module-alias": "^2.2.3",
     "next": "13.5.1",
     "postcss": "8.4.30",
     "react": "18.2.0",
