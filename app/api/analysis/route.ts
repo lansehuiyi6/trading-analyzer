@@ -17,7 +17,8 @@ export async function POST(request: NextRequest) {
     }
 
     // 检查 analysis.js 文件是否存在
-    const analysisScriptPath = path.join(process.cwd(), 'analysis.js');
+    // const analysisScriptPath = path.join(process.cwd(), 'analysis.js');
+    const analysisScriptPath = path.join(process.cwd(), 'app/api/analysis/analysis.js');
     
     try {
       // 尝试执行 analysis.js 脚本
