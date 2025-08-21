@@ -14,6 +14,8 @@ interface AnalysisResult {
   timeframe: string;
   result: string;
   status: 'success' | 'error';
+  error?: string;
+  rawData?: any;
 }
 
 const DEFAULT_PAIRS: TradingPair[] = [
@@ -99,7 +101,7 @@ export default function TradingAnalysis() {
     setIsAnalyzing(true);
     
     try {
-      // 模拟调用 analysis.js 脚本
+      // 调用分析API
       const response = await fetch('/api/analysis', {
         method: 'POST',
         headers: {
@@ -111,37 +113,73 @@ export default function TradingAnalysis() {
         }),
       });
 
-      let result: AnalysisResult;
+      const data = await response.json();
       
-      if (response.ok) {
-        const data = await response.json();
-        result = {
-          timestamp: new Date().toLocaleString('zh-CN'),
-          pair: selectedPair,
-          timeframe: selectedTimeframe,
-          result: data.result || '分析完成',
-          status: 'success'
-        };
-      } else {
-        // 如果API不存在，显示模拟结果
-        result = {
-          timestamp: new Date().toLocaleString('zh-CN'),
-          pair: selectedPair,
-          timeframe: selectedTimeframe,
-          result: `${selectedPair} ${selectedTimeframe} 周期分析结果：\n- 当前趋势：上涨\n- 支撑位：$45,000\n- 阻力位：$48,000\n- RSI：65.2\n- MACD：看涨信号`,
-          status: 'success'
-        };
+      if (!response.ok) {
+        // 处理API返回的错误
+        let errorMessage = data.error || 'API请求失败';
+        if (data.message) {
+          errorMessage += `: ${data.message}`;
+        }
+        
+        // 如果有日志，添加到错误信息中
+        if (Array.isArray(data.logs) && data.logs.length > 0) {
+          errorMessage += '\n\n分析日志：\n' + data.logs.join('\n');
+        }
+        
+        // 如果是开发环境，添加堆栈跟踪
+        if (process.env.NODE_ENV === 'development' && data.stack) {
+          errorMessage += '\n\n堆栈跟踪：\n' + data.stack;
+        }
+        
+        throw new Error(errorMessage);
       }
       
+      // 处理成功响应
+      const formattedLogs = Array.isArray(data.logs) 
+        ? data.logs.join('\n')
+        : '分析完成，无详细日志';
+      
+      const result: AnalysisResult = {
+        timestamp: new Date().toLocaleString('zh-CN'),
+        pair: selectedPair,
+        timeframe: selectedTimeframe,
+        result: formattedLogs,
+        status: 'success',
+        rawData: data
+      };
+            
       setAnalysisResults(prev => [result, ...prev]);
+      return result;
     } catch (error) {
+      console.error('分析失败:', error);
+      
+      let errorMessage = '未知错误';
+      let errorDetails = '';
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+        if (process.env.NODE_ENV === 'development' && error.stack) {
+          errorDetails = '\n\n堆栈跟踪：\n' + error.stack;
+        }
+      }
+      
+      const troubleshooting = '\n\n请检查：\n' +
+        '1. 后端服务是否正常运行\n' +
+        '2. 网络连接是否正常\n' +
+        '3. 控制台查看详细错误信息';
+      
       const errorResult: AnalysisResult = {
         timestamp: new Date().toLocaleString('zh-CN'),
         pair: selectedPair,
         timeframe: selectedTimeframe,
-        result: `分析失败: ${error instanceof Error ? error.message : '未知错误'}`,
-        status: 'error'
+        result: `分析失败: ${errorMessage}${troubleshooting}${errorDetails}`,
+        status: 'error',
+        error: errorMessage
       };
+      
+      setAnalysisResults(prev => [errorResult, ...prev]);
+      return errorResult;
       setAnalysisResults(prev => [errorResult, ...prev]);
     } finally {
       setIsAnalyzing(false);

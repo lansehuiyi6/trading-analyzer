@@ -9,15 +9,14 @@ const pair = process.argv[2];
 const timeframe = process.argv[3];
 
 if (!pair || !timeframe) {
-  console.error('使用方法: node analysis.js <交易对> <时间周期>');
-//   process.exit(1);
+    console.error('使用方法: node analysis.js <交易对> <时间周期>');
+    //   process.exit(1);
 }
 
-// const axios = require('axios').default;
-// const technicalindicators = require('technicalindicators');
-
-import axios from 'axios';
+// Import technicalindicators only
 import * as technicalindicators from 'technicalindicators';
+
+// Axios will be imported dynamically on the server side
 
 // 定义常量和配置
 const BINANCE_KLINE_API_URL = 'https://fapi.binance.com/fapi/v1/klines'; // 期货API，用于合约交易
@@ -107,7 +106,7 @@ function analyzeCandle(open, close, high, low) {
             };
         }
     }
-    
+
     // 空头信号
     if (close < open) {
         if (upperShadow > lowerShadow * 2 && upperShadow / totalRange > 0.4) {
@@ -220,9 +219,9 @@ function isThreeWhiteSoldiers(open, close) {
     const second = { open: open[open.length - 2], close: close[close.length - 2] };
     const third = { open: open[open.length - 1], close: close[close.length - 1] };
     return (first.close > first.open) && (second.close > second.open) && (third.close > third.open) &&
-           (second.open < first.close) && (second.open > first.open) &&
-           (third.open < second.close) && (third.open > second.open) &&
-           (second.close > first.close) && (third.close > second.close);
+        (second.open < first.close) && (second.open > first.open) &&
+        (third.open < second.close) && (third.open > second.open) &&
+        (second.close > first.close) && (third.close > second.close);
 }
 
 function isBullishHammerStick(open, close, high, low) {
@@ -319,9 +318,9 @@ function isThreeBlackCrows(open, close) {
     const second = { open: open[open.length - 2], close: close[close.length - 2] };
     const third = { open: open[open.length - 1], close: close[close.length - 1] };
     return (first.close < first.open) && (second.close < second.open) && (third.close < third.open) &&
-           (second.open < first.open) && (second.open > first.close) &&
-           (third.open < second.open) && (third.open > second.close) &&
-           (second.close < first.close) && (third.close < second.close);
+        (second.open < first.open) && (second.open > first.close) &&
+        (third.open < second.open) && (third.open > second.close) &&
+        (second.close < first.close) && (third.close < second.close);
 }
 
 function isHangingMan(open, close, high, low) {
@@ -346,17 +345,17 @@ function isTweezerTop(high) {
 }
 
 // 分析特定的反转K线形态，根据形态和趋势赋予信号分数
-function analyzeReversalPatterns(data, trend) {
+function analyzeReversalPatterns(data, currentTrend) {
     const reversalSignals = [];
     let totalScore = 0;
-    
+
     // 最新K线数据
     const latestOpen = data.open[data.open.length - 1];
     const latestClose = data.close[data.close.length - 1];
     const latestHigh = data.high[data.high.length - 1];
     const latestLow = data.low[data.low.length - 1];
     const prevClose = data.close[data.close.length - 2];
-    
+
     // 看涨形态信号
     if (isBullishEngulfing(data.open, data.close)) {
         reversalSignals.push('看涨吞没形态 (Bullish Engulfing)');
@@ -448,7 +447,7 @@ function analyzeReversalPatterns(data, trend) {
         reversalSignals.push('镊子顶 (Tweezer Top)');
         totalScore -= 1.5;
     }
-    
+
     // 处理未确认形态，主要是根据趋势判断
     if (isBullishHammerStick(latestOpen, latestClose, latestHigh, latestLow) && prevClose > latestOpen) {
         reversalSignals.push('未确认的锤子线 (Hammer Unconfirmed)');
@@ -458,7 +457,7 @@ function analyzeReversalPatterns(data, trend) {
         reversalSignals.push('未确认的吊人线 (Hanging Man Unconfirmed)');
         totalScore -= 1;
     }
-    
+
     // 确保不出现矛盾信号
     const finalSignals = [];
     if (totalScore > 0) {
@@ -484,11 +483,18 @@ function analyzeReversalPatterns(data, trend) {
 }
 
 
-async function runAnalysis(symbol = 'BTCUSDT', interval = '15m') {
-    // 设置全局变量，保持与原有代码兼容
+// Main analysis function
+export async function runAnalysis(symbol = 'BTCUSDT', interval = '15m') {
+    if (typeof window === 'undefined') {
+        // Server-side: ensure axios is available
+        const axios = (await import('axios')).default;
+        global.axios = axios;
+    }
+
+    // Set global variables for compatibility
     global.SYMBOL = symbol;
     global.INTERVAL = interval;
-    
+
     // 返回一个 Promise，以便在浏览器中异步调用
     return new Promise(async (resolve, reject) => {
         try {
@@ -500,9 +506,10 @@ async function runAnalysis(symbol = 'BTCUSDT', interval = '15m') {
 
             // 1. 从币安API获取K线数据和资金费率
             console.log(`正在从币安获取 ${symbolToUse} 永续合约 ${intervalToUse} K线数据和资金费率...`);
-            
+
             try {
                 // 并行获取K线数据和资金费率
+                const axios = global.axios || (await import('axios')).default;
                 [klineResponse, fundingRateResponse] = await Promise.all([
                     axios.get(BINANCE_KLINE_API_URL, {
                         params: {
@@ -526,393 +533,475 @@ async function runAnalysis(symbol = 'BTCUSDT', interval = '15m') {
                 return;
             }
 
-        const klines = klineResponse.data;
-        
-        // 提取所需数据
-        const closePrices = klines.map(kline => parseFloat(kline[4])); // 收盘价
-        const openPrices = klines.map(kline => parseFloat(kline[1])); // 开盘价
-        const highPrices = klines.map(kline => parseFloat(kline[2]));  // 最高价
-        const lowPrices = klines.map(kline => parseFloat(kline[3]));   // 最低价
-        const volumes = klines.map(kline => parseFloat(kline[5]));      // 成交量
+            const klines = klineResponse.data;
 
-        // 获取最新数据
-        const latestKline = klines[klines.length - 1];
-        const currentPrice = parseFloat(latestKline[4]);
-        const latestVolume = volumes[volumes.length - 1];
-        
-        // 使用Binance的24hr ticker API获取精确24h变化
-        const tickerResponse = await axios.get('https://fapi.binance.com/fapi/v1/ticker/24hr', {
-            params: { symbol: symbol }
-        });
-        const last24hChange = parseFloat(tickerResponse.data.priceChangePercent);
+            // 提取所需数据
+            const closePrices = klines.map(kline => parseFloat(kline[4])); // 收盘价
+            const openPrices = klines.map(kline => parseFloat(kline[1])); // 开盘价
+            const highPrices = klines.map(kline => parseFloat(kline[2]));  // 最高价
+            const lowPrices = klines.map(kline => parseFloat(kline[3]));   // 最低价
+            const volumes = klines.map(kline => parseFloat(kline[5]));     // 成交量
 
-        // 获取资金费率
-        let fundingRate = 0;
-        try {
-            if (fundingRateResponse && fundingRateResponse.data) {
-                fundingRate = parseFloat(fundingRateResponse.data.lastFundingRate || 0) * 100;
+            // 获取最新数据
+            const latestKline = klines[klines.length - 1];
+            const currentPrice = parseFloat(latestKline[4]);
+            const latestVolume = volumes[volumes.length - 1];
+
+            // 使用Binance的24hr ticker API获取精确24h变化
+            const tickerResponse = await axios.get('https://fapi.binance.com/fapi/v1/ticker/24hr', {
+                params: { symbol: symbol }
+            });
+            const last24hChange = parseFloat(tickerResponse.data.priceChangePercent);
+
+            // 获取资金费率
+            let fundingRate = 0;
+            try {
+                if (fundingRateResponse && fundingRateResponse.data) {
+                    fundingRate = parseFloat(fundingRateResponse.data.lastFundingRate || 0) * 100;
+                }
+            } catch (error) {
+                console.error('解析资金费率时出错:', error.message);
+                // 继续执行，使用默认值0
             }
+
+            // 2. 技术指标计算
+            // 均线系统
+            const ma5 = technicalindicators.SMA.calculate({ period: 5, values: closePrices });
+            const ma10 = technicalindicators.SMA.calculate({ period: 10, values: closePrices });
+            const ma20 = technicalindicators.SMA.calculate({ period: 20, values: closePrices });
+            const ma50 = technicalindicators.SMA.calculate({ period: 50, values: closePrices });
+            const ma100 = technicalindicators.SMA.calculate({ period: 100, values: closePrices });
+
+            // MACD
+            const fullMacd = technicalindicators.MACD.calculate({
+                values: closePrices,
+                fastPeriod: 12,
+                slowPeriod: 26,
+                signalPeriod: 9,
+                SimpleMA: false
+            });
+            const macd = fullMacd[fullMacd.length - 1];
+            const lastHistogram = fullMacd.length > 1 ? fullMacd[fullMacd.length - 2].histogram : 0;
+
+            // 布林带 (BOLL)
+            const boll = technicalindicators.BollingerBands.calculate({
+                period: 20,
+                values: closePrices,
+                stdDev: 2
+            }).pop();
+
+            // RSI
+            const rsi6 = technicalindicators.RSI.calculate({ period: 6, values: closePrices }).pop();
+            const rsi14 = technicalindicators.RSI.calculate({ period: 14, values: closePrices }).pop();
+
+            // KDJ (Stochastic)
+            let kdj = { k: 50, d: 50, j: 50 }; // Default values
+            try {
+                const kdjResults = technicalindicators.Stochastic.calculate({
+                    high: highPrices,
+                    low: lowPrices,
+                    close: closePrices,
+                    period: 14,
+                    signalPeriod: 3
+                });
+
+                if (kdjResults && kdjResults.length > 0) {
+                    const lastKdj = kdjResults[kdjResults.length - 1];
+                    if (lastKdj && typeof lastKdj.k !== 'undefined' && typeof lastKdj.d !== 'undefined') {
+                        kdj = lastKdj;
+                        // 手动计算KDJ的J值
+                        kdj.j = 3 * kdj.k - 2 * kdj.d;
+                    }
+                }
+            } catch (error) {
+                console.error('计算KDJ指标时出错:', error.message);
+                // 使用默认值继续执行
+            }
+
+            // ADX指标，用于趋势强度
+            const adx = technicalindicators.ADX.calculate({
+                high: highPrices,
+                low: lowPrices,
+                close: closePrices,
+                period: 14
+            }).pop();
+            const trendStrengthFactor = (adx.adx > 25) ? 1.2 : 0.8; // 如果趋势强，增加信号权重
+
+            // 3. 编写分析逻辑并生成报告
+            // 初始化变量
+            let signals = [];
+            let signalScore = 0;
+            let trend = '震荡';
+            let direction = '中性';
+            let entryStrategy = '';
+            let stopLoss = 0;
+            let target1 = 0;
+            let target2 = 0;
+            let trendStrength = '中等';
+            let volumeAnalysis = '正常';
+
+            // 计算均线斜率判断趋势
+            const ma5Slope = ma5[ma5.length - 1] - ma5[ma5.length - 2];
+            const ma10Slope = ma10[ma10.length - 1] - ma10[ma10.length - 2];
+            const ma20Slope = ma20[ma20.length - 1] - ma20[ma20.length - 2];
+
+            // 判断趋势
+            if (ma5[ma5.length - 1] > ma10[ma10.length - 1] && ma10[ma10.length - 1] > ma20[ma20.length - 1] && ma5Slope > 0) {
+                trend = '上涨';
+                trendStrength = '强劲';
+            } else if (ma5[ma5.length - 1] < ma10[ma10.length - 1] && ma10[ma10.length - 1] < ma20[ma20.length - 1] && ma5Slope < 0) {
+                trend = '下跌';
+                trendStrength = '强劲';
+            } else if ((ma5[ma5.length - 1] > ma10[ma10.length - 1] && ma5[ma5.length - 1] > ma20[ma20.length - 1]) ||
+                (ma10[ma10.length - 1] > ma20[ma10.length - 1] && ma10[ma10.length - 1] > ma50[ma10.length - 1])) {
+                trend = '上涨';
+                trendStrength = '中等';
+            } else if ((ma5[ma5.length - 1] < ma10[ma5.length - 1] && ma5[ma5.length - 1] < ma20[ma5.length - 1]) ||
+                (ma10[ma10.length - 1] < ma20[ma10.length - 1] && ma10[ma10.length - 1] < ma50[ma10.length - 1])) {
+                trend = '下跌';
+                trendStrength = '中等';
+            }
+
+            // 动态计算支撑和压力位 (使用前一天的日K线)
+            const dailyKlineResponse = await axios.get(BINANCE_KLINE_API_URL, {
+                params: {
+                    symbol: symbol,
+                    interval: '1d',
+                    limit: 2
+                }
+            });
+            const dailyKlines = dailyKlineResponse.data;
+            const prevDaily = dailyKlines[0];
+            const pp = calculatePivotPoints(
+                parseFloat(prevDaily[2]),
+                parseFloat(prevDaily[3]),
+                parseFloat(prevDaily[4])
+            );
+
+            // 动态计算斐波那契回调位
+            const fibLevels = calculateFibonacciLevels(klines);
+
+            const support1 = pp.s1;
+            const support2 = pp.s2;
+            const resistance1 = pp.r1;
+            const resistance2 = pp.r2;
+
+            // 动态成交量分析
+            const volumeSMA = technicalindicators.SMA.calculate({ period: 20, values: volumes }).pop();
+            const latestPriceChange = closePrices[closePrices.length - 1] - closePrices[closePrices.length - 2];
+            volumeAnalysis = `当前成交量（${latestVolume.toFixed(2)}）与20周期均量（${volumeSMA.toFixed(2)}）相当。`;
+
+            if (latestVolume > volumeSMA * 1.5) {
+                if (latestPriceChange > 0) {
+                    volumeAnalysis = `当前为放量上涨，多头动能强劲。`;
+                } else {
+                    volumeAnalysis = `当前为放量下跌，空头动能强劲，需警惕。`;
+                }
+            } else if (latestVolume < volumeSMA * 0.5) {
+                if (latestPriceChange > 0) {
+                    volumeAnalysis = `当前为缩量上涨，多头动能不足，可能面临回调。`;
+                } else {
+                    volumeAnalysis = `当前为缩量下跌，空头动能减弱，可能存在反弹。`;
+                }
+            } else if (latestPriceChange > 0 && latestVolume < volumeSMA) {
+                volumeAnalysis = `近期出现缩量反弹，多头动能减弱，反弹力度可能有限。`;
+            } else if (latestPriceChange < 0 && latestVolume < volumeSMA) {
+                volumeAnalysis = `近期出现缩量下跌，空头动能有所衰竭，可能止跌。`;
+            }
+
+
+            // 均线信号
+            if (ma5[ma5.length - 1] > ma10[ma10.length - 1] && ma10[ma10.length - 1] > ma20[ma20.length - 1]) {
+                signalScore += 2 * trendStrengthFactor;
+                signals.push('均线系统呈多头排列，看涨。');
+            } else if (ma5[ma5.length - 1] < ma10[ma10.length - 1] && ma10[ma10.length - 1] < ma20[ma20.length - 1]) {
+                signalScore -= 2 * trendStrengthFactor;
+                signals.push('均线系统呈空头排列，看跌。');
+            } else {
+                signals.push('均线系统纠缠，方向不明。');
+            }
+
+            // MACD信号
+            if (macd.MACD > macd.signal && macd.histogram > 0) {
+                signalScore += 2 * trendStrengthFactor;
+                signals.push('MACD金叉，柱状体上扬，看涨。');
+            } else if (macd.MACD < macd.signal && macd.histogram < 0) {
+                signalScore -= 2 * trendStrengthFactor;
+                signals.push('MACD死叉，柱状体下扬，看跌。');
+            } else {
+                signals.push('MACD信号不明确。');
+            }
+
+            // RSI和KDJ信号
+            if (rsi6 < 30) {
+                signalScore += 1 * trendStrengthFactor;
+                signals.push('RSI进入超卖区，存在反弹需求。');
+            }
+            if (kdj.k < 20 && kdj.d < 20) {
+                signalScore += 1 * trendStrengthFactor;
+                signals.push('KDJ超卖，潜在金叉信号。');
+            }
+            if (rsi6 > 70) {
+                signalScore -= 1 * trendStrengthFactor;
+                signals.push('RSI进入超买区，存在回调风险。');
+            }
+            if (kdj.k > 80 && kdj.d > 80) {
+                signalScore -= 1 * trendStrengthFactor;
+                signals.push('KDJ超买，潜在死叉信号。');
+            }
+            // 分析K线形态
+            const candleAnalysis = analyzeCandle(
+                openPrices[openPrices.length - 1],
+                closePrices[closePrices.length - 1],
+                highPrices[highPrices.length - 1],
+                lowPrices[lowPrices.length - 1]
+            );
+
+            signalScore += candleAnalysis.score * trendStrengthFactor;
+            signals.push(`K线形态分析：${candleAnalysis.text}`);
+
+            // 反转形态信号
+            const reversalAnalysis = analyzeReversalPatterns({
+                open: openPrices.slice(-10),
+                high: highPrices.slice(-10),
+                low: lowPrices.slice(-10),
+                close: closePrices.slice(-10)
+            }, trend); // 传入当前趋势
+
+            // 使用反转分析中的score或默认值0
+            const reversalScore = reversalAnalysis.score || 0;
+            signalScore += reversalScore * trendStrengthFactor;
+
+            if (reversalAnalysis.signals && reversalAnalysis.signals.length > 0) {
+                signals.push(`识别出反转形态：${reversalAnalysis.signals.join('、')}`);
+            } else {
+                signals.push('未识别出明显反转形态。');
+            }
+
+            // 成交量信号
+            if (latestVolume > volumeSMA * 1.5 && latestPriceChange > 0) {
+                signalScore += 1 * trendStrengthFactor;
+                signals.push('放量上涨，确认多头信号。');
+            } else if (latestVolume > volumeSMA * 1.5 && latestPriceChange < 0) {
+                signalScore -= 1 * trendStrengthFactor;
+                signals.push('放量下跌，确认空头信号。');
+            }
+
+            // 资金费率信号
+            if (fundingRate > 0.01) {
+                signalScore -= 1;
+                signals.push('资金费率正值过高，多头付费，存在空头机会。');
+            } else if (fundingRate < -0.01) {
+                signalScore += 1;
+                signals.push('资金费率负值过高，空头付费，存在多头机会。');
+            } else {
+                signals.push('资金费率中性，无极端多空情绪。');
+            }
+
+            // 根据综合评分判断方向和策略
+            if (signalScore >= 4) {
+                direction = '看涨（多头趋势强劲）';
+                stopLoss = pp.s3;
+                target1 = pp.r1;
+                target2 = pp.r2;
+
+                const fib382 = fibLevels['38.2%'];
+                const fib50 = fibLevels['50%'];
+                let fibDesc = '';
+                // 动态调整斐波那契入场描述
+                if (currentPrice < fib382) {
+                    // 当前价格低于斐波那契38.2%位，该点位为阻力，需等待价格突破
+                    fibDesc = `或有效突破斐波那契38.2%位 ${fib382.toFixed(2)} 后考虑分批建仓。`;
+                } else {
+                    // 当前价格高于斐波那契38.2%位，该点位为支撑，可等待回调
+                    fibDesc = `或等待价格回调至斐波那契38.2%位 ${fib382.toFixed(2)} 附近分批建仓。`;
+                }
+                entryStrategy = `入场时机：现价 ${currentPrice.toFixed(2)} 附近轻仓试多，${fibDesc}`;
+
+            } else if (signalScore >= 2) {
+                direction = '震荡偏多（短期存在反弹需求）';
+                stopLoss = pp.s2;
+                target1 = pp.r1;
+                target2 = pp.r2;
+
+                const fib50 = fibLevels['50%'];
+                let fibDesc = '';
+                // 动态调整斐波那契入场描述
+                if (currentPrice > fib50) {
+                    fibDesc = `或等待价格回调至斐波那契50%位 ${fib50.toFixed(2)} 或S1 ${support1.toFixed(2)} 附近分批建仓。`;
+                } else {
+                    fibDesc = `或等待价格反弹至斐波那契50%位 ${fib50.toFixed(2)} 附近轻仓尝试做空，但需注意风险。`;
+                }
+                entryStrategy = `入场时机：激进者现价 ${currentPrice.toFixed(2)} 附近轻仓试多，${fibDesc}`;
+
+            } else if (signalScore <= -4) {
+                direction = '看空（空头趋势强劲）';
+                stopLoss = pp.r3;
+                target1 = pp.s1;
+                target2 = pp.s2;
+
+                const fib382 = fibLevels['38.2%'];
+                const fib50 = fibLevels['50%'];
+                let fibDesc = '';
+                // 动态调整斐波那契入场描述
+                if (currentPrice > fib382) {
+                    fibDesc = `或等待价格反弹至斐波那契38.2%位 ${fib382.toFixed(2)} 附近分批做空。`;
+                } else {
+                    fibDesc = `或有效跌破斐波那契50%位 ${fib50.toFixed(2)} 后考虑分批做空。`;
+                }
+                entryStrategy = `入场时机：现价 ${currentPrice.toFixed(2)} 附近轻仓试空，${fibDesc}`;
+
+            } else if (signalScore <= -2) {
+                direction = '震荡偏空（短期承压，但未破关键支撑）';
+                stopLoss = pp.r2;
+                target1 = pp.s1;
+                target2 = pp.s2;
+
+                const fib50 = fibLevels['50%'];
+                let fibDesc = '';
+                // 动态调整斐波那契入场描述
+                if (currentPrice < fib50) {
+                    fibDesc = `或等待价格反弹至斐波那契50%位 ${fib50.toFixed(2)} 或R1 ${resistance1.toFixed(2)} 附近分批做空。`;
+                } else {
+                    fibDesc = `或等待价格回调至斐波那契50%位 ${fib50.toFixed(2)} 附近轻仓尝试做多，但需注意风险。`;
+                }
+                entryStrategy = `入场时机：激进者现价 ${currentPrice.toFixed(2)} 附近轻仓试空，${fibDesc}`;
+
+            } else {
+                direction = '震荡（多空双方胶着）';
+                entryStrategy = `入场时机：等待价格有效突破或跌破关键枢轴点。`;
+                stopLoss = pp.s2;
+                target1 = pp.r1;
+                target2 = pp.r2;
+            }
+
+            // 4. 打印报告
+            console.log(`\n--- ${symbol} 永续合约 ${interval} 行情走势分析报告 ---\n`);
+            console.log(`根据实时行情数据`);
+            console.log(`当前价格：${currentPrice.toFixed(2)} USDT`);
+            console.log(`24小时涨跌：${last24hChange.toFixed(2)}%`);
+            console.log(`主要支撑位：枢轴点S2 ${support2.toFixed(2)} USDT、枢轴点S1 ${support1.toFixed(2)} USDT`);
+            console.log(`主要压力位：枢轴点R1 ${resistance1.toFixed(2)} USDT、枢轴点R2 ${resistance2.toFixed(2)} USDT`);
+            console.log(`斐波那契回调位：`);
+            for (const level in fibLevels) {
+                console.log(`  - ${level} 回调位：${fibLevels[level].toFixed(2)} USDT`);
+            }
+            console.log(`当前趋势：${trend} (ADX: ${adx.adx.toFixed(2)}, 趋势强度: ${adx.adx > 25 ? '强' : '弱'})`);
+
+            console.log(`\n--- 详细解释 ---`);
+            console.log(`技术指标综合：`);
+
+            // 动态MA描述
+            let maDescription = '';
+            if (ma5[ma5.length - 1] > ma10[ma10.length - 1] && ma10[ma10.length - 1] > ma20[ma20.length - 1]) {
+                maDescription = `MA5（${ma5[ma5.length - 1].toFixed(2)}）上穿MA10（${ma10[ma10.length - 1].toFixed(2)}）和MA20（${ma20[ma20.length - 1].toFixed(2)}），呈多头排列，短期趋势偏强。`;
+            } else if (ma5[ma5.length - 1] < ma10[ma10.length - 1] && ma10[ma10.length - 1] < ma20[ma20.length - 1]) {
+                maDescription = `MA5（${ma5[ma5.length - 1].toFixed(2)}）下穿MA10（${ma10[ma10.length - 1].toFixed(2)}）和MA20（${ma20[ma20.length - 1].toFixed(2)}），呈空头排列，短期趋势偏弱。`;
+            } else {
+                maDescription = `MA5（${ma5[ma5.length - 1].toFixed(2)}）、MA10（${ma10[ma10.length - 1].toFixed(2)}）和MA20（${ma20[ma20.length - 1].toFixed(2)}）纠缠，趋势不明。`;
+            }
+            console.log(`均线系统：${maDescription}`);
+
+            console.log(`MACD：DIF（${macd.MACD.toFixed(2)}）在DEA（${macd.signal.toFixed(2)}）${macd.MACD > macd.signal ? '上方' : '下方'}，${macd.MACD > macd.signal ? '金叉运行' : '死叉运行'}。柱状体（${macd.histogram.toFixed(2)}）${macd.histogram > 0 ? '上涨动能较强' : '下跌动能较强'}。`);
+            console.log(`BOLL：价格位于中轨（${boll.middle.toFixed(2)}）${currentPrice > boll.middle ? '上方' : '下方'}，${currentPrice > boll.upper ? '突破上轨，看涨动能强劲' : currentPrice < boll.lower ? '跌破下轨，看跌动能强劲' : '震荡运行'}。`);
+            console.log(`RSI：RSI6（${rsi6.toFixed(2)}）${rsi6 > 70 ? '进入超买区间' : rsi6 < 30 ? '进入超卖区间' : '中性'}，RSI14（${rsi14.toFixed(2)}）中性偏低，短期存在技术性修复需求。`);
+            console.log(`KDJ：K（${kdj.k.toFixed(2)}）与D（${kdj.d.toFixed(2)}）${kdj.k > kdj.d ? '金叉' : '死叉'}，J（${kdj.j.toFixed(2)}）${kdj.j > 80 ? '超买' : kdj.j < 20 ? '超卖' : '中性'}。`);
+
+            console.log(`\n资金与量价分析：`);
+            console.log(`资金费率：${fundingRate.toFixed(6)}%（${fundingRate > 0.01 ? '多头付费' : fundingRate < -0.01 ? '空头付费' : '中性'}）。`);
+            console.log(`成交量：${volumeAnalysis}`);
+            console.log(`K线形态：${candleAnalysis.text}`);
+
+            console.log(`\n--- 分析结果 ---`);
+            console.log(`综合信号评分：${signalScore.toFixed(2)}分`);
+            reversalAnalysis.signals.forEach(s => console.log(` - ${s}`));
+            console.log(`方向：${direction}`);
+            console.log(`入场时机：${entryStrategy}`);
+
+            // 根据方向动态打印止损和目标价位
+            if (direction.includes('看涨') || direction.includes('震荡偏多')) {
+                console.log(`止损设定：止损位 ${pp.s3.toFixed(2)}，约${(Math.abs(currentPrice - pp.s3) / currentPrice * 100).toFixed(2)}%风险控制。`);
+                console.log(`目标价位：第一目标 ${pp.r1.toFixed(2)}，第二目标 ${pp.r2.toFixed(2)}。`);
+            } else if (direction.includes('看空') || direction.includes('震荡偏空')) {
+                console.log(`止损设定：止损位 ${pp.r3.toFixed(2)}，约${(Math.abs(currentPrice - pp.r3) / currentPrice * 100).toFixed(2)}%风险控制。`);
+                console.log(`目标价位：第一目标 ${pp.s1.toFixed(2)}，第二目标 ${pp.s2.toFixed(2)}。`);
+            } else {
+                console.log(`\n--- 详细交易策略（震荡行情） ---`);
+                console.log(`多头策略：`);
+                console.log(`  - 入场：价格有效突破R1 ${resistance1.toFixed(2)} 后考虑入场。`);
+                console.log(`  - 止损：设置在S1 ${support1.toFixed(2)} 附近。`);
+                console.log(`  - 目标：第一目标R2 ${resistance2.toFixed(2)}，第二目标R3 ${pp.r3.toFixed(2)}。`);
+                console.log(`空头策略：`);
+                console.log(`  - 入场：价格有效跌破S1 ${support1.toFixed(2)} 后考虑入场。`);
+                console.log(`  - 止损：设置在R1 ${resistance1.toFixed(2)} 附近。`);
+                console.log(`  - 目标：第一目标S2 ${support2.toFixed(2)}，第二目标S3 ${pp.s3.toFixed(2)}。`);
+            }
+
+            // 根据评分计算风险等级
+            let riskLevel = '中';
+            const scoreToUse = Math.abs(signalScore); // 使用signalScore的绝对值来计算风险等级
+            if (scoreToUse >= 8) {
+                riskLevel = '高';
+            } else if (scoreToUse <= 4) {
+                riskLevel = '低';
+            }
+
+            // 收集所有分析结果
+            const analysisResult = {
+                summary: {
+                    symbol: global.SYMBOL,
+                    interval: global.INTERVAL,
+                    currentPrice: currentPrice,
+                    direction: direction,
+                    trend: trend,
+                    supportLevels: {
+                        s1: pp.s1.toFixed(2),
+                        s2: pp.s2.toFixed(2),
+                        s3: pp.s3.toFixed(2)
+                    },
+                    resistanceLevels: {
+                        r1: pp.r1.toFixed(2),
+                        r2: pp.r2.toFixed(2),
+                        r3: pp.r3.toFixed(2)
+                    },
+                    riskLevel: riskLevel,
+                    volumeAnalysis: volumeAnalysis,
+                    trendStrength: trendStrength,
+                    rsi: rsi6,
+                    macd: {
+                        macd: macd.MACD[macd.MACD.length - 1],
+                        signal: macd.signal[macd.signal.length - 1],
+                        histogram: macd.histogram[macd.histogram.length - 1]
+                    },
+                    bollingerBands: {
+                        upper: boll.upper,
+                        middle: boll.middle,
+                        lower: boll.lower
+                    }
+                },
+                signals: signals,
+                score: signalScore,
+                timestamp: new Date().toISOString(),
+                disclaimer: "本分析仅供参考，不构成任何投资建议！"
+            };
+
+            // 返回分析结果
+            resolve(analysisResult);
+
         } catch (error) {
-            console.error('解析资金费率时出错:', error.message);
-            // 继续执行，使用默认值0
+            console.error('在执行脚本时发生错误:', error.message);
+            reject(error);
         }
-
-        // 2. 技术指标计算
-        // 均线系统
-        const ma5 = technicalindicators.SMA.calculate({ period: 5, values: closePrices }).pop();
-        const ma10 = technicalindicators.SMA.calculate({ period: 10, values: closePrices }).pop();
-        const ma20 = technicalindicators.SMA.calculate({ period: 20, values: closePrices }).pop();
-
-        // MACD
-        const fullMacd = technicalindicators.MACD.calculate({
-            values: closePrices,
-            fastPeriod: 12,
-            slowPeriod: 26,
-            signalPeriod: 9,
-            SimpleMA: false
-        });
-        const macd = fullMacd.pop();
-        const lastHistogram = fullMacd.length > 1 ? fullMacd[fullMacd.length - 2].histogram : 0;
-        
-        // 布林带 (BOLL)
-        const boll = technicalindicators.BollingerBands.calculate({
-            period: 20,
-            values: closePrices,
-            stdDev: 2
-        }).pop();
-
-        // RSI
-        const rsi6 = technicalindicators.RSI.calculate({ period: 6, values: closePrices }).pop();
-        const rsi14 = technicalindicators.RSI.calculate({ period: 14, values: closePrices }).pop();
-        
-        // KDJ (Stochastic)
-        const kdj = technicalindicators.Stochastic.calculate({
-            high: highPrices,
-            low: lowPrices,
-            close: closePrices,
-            period: 14,
-            signalPeriod: 3
-        }).pop();
-        
-        // 手动计算KDJ的J值
-        kdj.j = 3 * kdj.k - 2 * kdj.d;
-
-        // ADX指标，用于趋势强度
-        const adx = technicalindicators.ADX.calculate({
-            high: highPrices,
-            low: lowPrices,
-            close: closePrices,
-            period: 14
-        }).pop();
-        const trendStrengthFactor = (adx.adx > 25) ? 1.2 : 0.8; // 如果趋势强，增加信号权重
-
-        // 3. 编写分析逻辑并生成报告
-        // 判断趋势
-        let trend = '震荡';
-        if (ma5 < ma10 && ma10 < ma20) {
-            trend = '震荡偏空';
-        } else if (ma5 > ma10 && ma10 > ma20) {
-            trend = '震荡偏多';
-        }
-        
-        // 动态计算支撑和压力位 (使用前一天的日K线)
-        const dailyKlineResponse = await axios.get(BINANCE_KLINE_API_URL, {
-            params: {
-                symbol: symbol,
-                interval: '1d',
-                limit: 2
-            }
-        });
-        const dailyKlines = dailyKlineResponse.data;
-        const prevDaily = dailyKlines[0];
-        const pp = calculatePivotPoints(
-            parseFloat(prevDaily[2]),
-            parseFloat(prevDaily[3]),
-            parseFloat(prevDaily[4])
-        );
-
-        // 动态计算斐波那契回调位
-        const fibLevels = calculateFibonacciLevels(klines);
-
-        const support1 = pp.s1;
-        const support2 = pp.s2;
-        const resistance1 = pp.r1;
-        const resistance2 = pp.r2;
-
-        // 动态成交量分析
-        const volumeSMA = technicalindicators.SMA.calculate({ period: 20, values: volumes }).pop();
-        const latestPriceChange = closePrices[closePrices.length - 1] - closePrices[closePrices.length - 2];
-        let volumeAnalysis = `当前成交量（${latestVolume.toFixed(2)}）与20周期均量（${volumeSMA.toFixed(2)}）相当。`;
-        
-        if (latestVolume > volumeSMA * 1.5) {
-            if (latestPriceChange > 0) {
-                volumeAnalysis = `当前为放量上涨，多头动能强劲。`;
-            } else {
-                volumeAnalysis = `当前为放量下跌，空头动能强劲，需警惕。`;
-            }
-        } else if (latestVolume < volumeSMA * 0.5) {
-            if (latestPriceChange > 0) {
-                volumeAnalysis = `当前为缩量上涨，多头动能不足，可能面临回调。`;
-            } else {
-                volumeAnalysis = `当前为缩量下跌，空头动能减弱，可能存在反弹。`;
-            }
-        } else if (latestPriceChange > 0 && latestVolume < volumeSMA) {
-            volumeAnalysis = `近期出现缩量反弹，多头动能减弱，反弹力度可能有限。`;
-        } else if (latestPriceChange < 0 && latestVolume < volumeSMA) {
-            volumeAnalysis = `近期出现缩量下跌，空头动能有所衰竭，可能止跌。`;
-        }
-        
-        // 基于指标组合动态判断方向和策略
-        let direction, entryStrategy, stopLoss, target1, target2;
-        let signalScore = 0;
-        let signals = [];
-
-        // 均线信号
-        if (ma5 > ma10 && ma10 > ma20) {
-            signalScore += 2 * trendStrengthFactor;
-            signals.push('均线系统呈多头排列，看涨。');
-        } else if (ma5 < ma10 && ma10 < ma20) {
-            signalScore -= 2 * trendStrengthFactor;
-            signals.push('均线系统呈空头排列，看跌。');
-        } else {
-            signals.push('均线系统纠缠，方向不明。');
-        }
-
-        // MACD信号
-        if (macd.MACD > macd.signal && macd.histogram > 0) {
-            signalScore += 2 * trendStrengthFactor;
-            signals.push('MACD金叉，柱状体上扬，看涨。');
-        } else if (macd.MACD < macd.signal && macd.histogram < 0) {
-            signalScore -= 2 * trendStrengthFactor;
-            signals.push('MACD死叉，柱状体下扬，看跌。');
-        } else {
-            signals.push('MACD信号不明确。');
-        }
-
-        // RSI和KDJ信号
-        if (rsi6 < 30) {
-            signalScore += 1 * trendStrengthFactor;
-            signals.push('RSI进入超卖区，存在反弹需求。');
-        }
-        if (kdj.k < 20 && kdj.d < 20) {
-            signalScore += 1 * trendStrengthFactor;
-            signals.push('KDJ超卖，潜在金叉信号。');
-        }
-        if (rsi6 > 70) {
-            signalScore -= 1 * trendStrengthFactor;
-            signals.push('RSI进入超买区，存在回调风险。');
-        }
-        if (kdj.k > 80 && kdj.d > 80) {
-            signalScore -= 1 * trendStrengthFactor;
-            signals.push('KDJ超买，潜在死叉信号。');
-        }
-        
-        // K线形态信号
-        const candleAnalysis = analyzeCandle(
-            openPrices[openPrices.length - 1],
-            closePrices[closePrices.length - 1],
-            highPrices[highPrices.length - 1],
-            lowPrices[lowPrices.length - 1]
-        );
-        signalScore += candleAnalysis.score * trendStrengthFactor;
-        signals.push(`K线形态分析：${candleAnalysis.text}`);
-        
-        // 反转形态信号
-        const reversalAnalysis = analyzeReversalPatterns({
-            open: openPrices.slice(-10),
-            high: highPrices.slice(-10),
-            low: lowPrices.slice(-10),
-            close: closePrices.slice(-10)
-        }, trend); // 传入趋势参数
-        signalScore += reversalAnalysis.score * trendStrengthFactor;
-        if (reversalAnalysis.signals.length > 0) {
-            signals.push(`识别出反转形态：${reversalAnalysis.signals.join('、')}`);
-        } else {
-            signals.push('未识别出明显反转形态。');
-        }
-
-        // 成交量信号
-        if (latestVolume > volumeSMA * 1.5 && latestPriceChange > 0) {
-            signalScore += 1 * trendStrengthFactor;
-            signals.push('放量上涨，确认多头信号。');
-        } else if (latestVolume > volumeSMA * 1.5 && latestPriceChange < 0) {
-            signalScore -= 1 * trendStrengthFactor;
-            signals.push('放量下跌，确认空头信号。');
-        }
-
-        // 资金费率信号
-        if (fundingRate > 0.01) {
-            signalScore -= 1;
-            signals.push('资金费率正值过高，多头付费，存在空头机会。');
-        } else if (fundingRate < -0.01) {
-            signalScore += 1;
-            signals.push('资金费率负值过高，空头付费，存在多头机会。');
-        } else {
-            signals.push('资金费率中性，无极端多空情绪。');
-        }
-
-        // 根据综合评分判断方向和策略
-        if (signalScore >= 4) {
-            direction = '看涨（多头趋势强劲）';
-            stopLoss = pp.s3;
-            target1 = pp.r1;
-            target2 = pp.r2;
-
-            const fib382 = fibLevels['38.2%'];
-            const fib50 = fibLevels['50%'];
-            let fibDesc = '';
-    // 动态调整斐波那契入场描述
-    if (currentPrice < fib382) {
-        // 当前价格低于斐波那契38.2%位，该点位为阻力，需等待价格突破
-        fibDesc = `或有效突破斐波那契38.2%位 ${fib382.toFixed(2)} 后考虑分批建仓。`;
-    } else {
-        // 当前价格高于斐波那契38.2%位，该点位为支撑，可等待回调
-        fibDesc = `或等待价格回调至斐波那契38.2%位 ${fib382.toFixed(2)} 附近分批建仓。`;
-    }
-            entryStrategy = `入场时机：现价 ${currentPrice.toFixed(2)} 附近轻仓试多，${fibDesc}`;
-
-        } else if (signalScore >= 2) {
-            direction = '震荡偏多（短期存在反弹需求）';
-            stopLoss = pp.s2;
-            target1 = pp.r1;
-            target2 = pp.r2;
-
-            const fib50 = fibLevels['50%'];
-            let fibDesc = '';
-    // 动态调整斐波那契入场描述
-    if (currentPrice > fib50) {
-        fibDesc = `或等待价格回调至斐波那契50%位 ${fib50.toFixed(2)} 或S1 ${support1.toFixed(2)} 附近分批建仓。`;
-    } else {
-        fibDesc = `或等待价格反弹至斐波那契50%位 ${fib50.toFixed(2)} 附近轻仓尝试做空，但需注意风险。`;
-    }
-            entryStrategy = `入场时机：激进者现价 ${currentPrice.toFixed(2)} 附近轻仓试多，${fibDesc}`;
-
-        } else if (signalScore <= -4) {
-            direction = '看空（空头趋势强劲）';
-            stopLoss = pp.r3;
-            target1 = pp.s1;
-            target2 = pp.s2;
-
-            const fib382 = fibLevels['38.2%'];
-            const fib50 = fibLevels['50%'];
-            let fibDesc = '';
-    // 动态调整斐波那契入场描述
-    if (currentPrice > fib382) {
-        fibDesc = `或等待价格反弹至斐波那契38.2%位 ${fib382.toFixed(2)} 附近分批做空。`;
-    } else {
-        fibDesc = `或有效跌破斐波那契50%位 ${fib50.toFixed(2)} 后考虑分批做空。`;
-    }
-            entryStrategy = `入场时机：现价 ${currentPrice.toFixed(2)} 附近轻仓试空，${fibDesc}`;
-
-        } else if (signalScore <= -2) {
-            direction = '震荡偏空（短期承压，但未破关键支撑）';
-            stopLoss = pp.r2;
-            target1 = pp.s1;
-            target2 = pp.s2;
-
-            const fib50 = fibLevels['50%'];
-            let fibDesc = '';
-    // 动态调整斐波那契入场描述
-    if (currentPrice < fib50) {
-        fibDesc = `或等待价格反弹至斐波那契50%位 ${fib50.toFixed(2)} 或R1 ${resistance1.toFixed(2)} 附近分批做空。`;
-    } else {
-        fibDesc = `或等待价格回调至斐波那契50%位 ${fib50.toFixed(2)} 附近轻仓尝试做多，但需注意风险。`;
-    }
-            entryStrategy = `入场时机：激进者现价 ${currentPrice.toFixed(2)} 附近轻仓试空，${fibDesc}`;
-
-        } else {
-            direction = '震荡（多空双方胶着）';
-            entryStrategy = `入场时机：等待价格有效突破或跌破关键枢轴点。`;
-            stopLoss = pp.s2;
-            target1 = pp.r1;
-            target2 = pp.r2;
-        }
-        
-        // 4. 打印报告
-        console.log(`\n--- ${symbol} 永续合约 ${interval} 行情走势分析报告 ---\n`);
-        console.log(`根据实时行情数据`);
-        console.log(`当前价格：${currentPrice.toFixed(2)} USDT`);
-        console.log(`24小时涨跌：${last24hChange.toFixed(2)}%`);
-        console.log(`主要支撑位：枢轴点S2 ${support2.toFixed(2)} USDT、枢轴点S1 ${support1.toFixed(2)} USDT`);
-        console.log(`主要压力位：枢轴点R1 ${resistance1.toFixed(2)} USDT、枢轴点R2 ${resistance2.toFixed(2)} USDT`);
-        console.log(`斐波那契回调位：`);
-        for (const level in fibLevels) {
-            console.log(`  - ${level} 回调位：${fibLevels[level].toFixed(2)} USDT`);
-        }
-        console.log(`当前趋势：${trend} (ADX: ${adx.adx.toFixed(2)}, 趋势强度: ${adx.adx > 25 ? '强' : '弱'})`);
-
-        console.log(`\n--- 详细解释 ---`);
-        console.log(`技术指标综合：`);
-        
-        // 动态MA描述
-        let maDescription = '';
-        if (ma5 > ma10 && ma10 > ma20) {
-            maDescription = `MA5（${ma5.toFixed(2)}）上穿MA10（${ma10.toFixed(2)}）和MA20（${ma20.toFixed(2)}），呈多头排列，短期趋势偏强。`;
-        } else if (ma5 < ma10 && ma10 < ma20) {
-            maDescription = `MA5（${ma5.toFixed(2)}）下穿MA10（${ma10.toFixed(2)}）和MA20（${ma20.toFixed(2)}），呈空头排列，短期趋势偏弱。`;
-        } else {
-            maDescription = `MA5（${ma5.toFixed(2)}）、MA10（${ma10.toFixed(2)}）和MA20（${ma20.toFixed(2)}）纠缠，趋势不明。`;
-        }
-        console.log(`均线系统：${maDescription}`);
-
-        console.log(`MACD：DIF（${macd.MACD.toFixed(2)}）在DEA（${macd.signal.toFixed(2)}）${macd.MACD > macd.signal ? '上方' : '下方'}，${macd.MACD > macd.signal ? '金叉运行' : '死叉运行'}。柱状体（${macd.histogram.toFixed(2)}）${macd.histogram > 0 ? '上涨动能较强' : '下跌动能较强'}。`);
-        console.log(`BOLL：价格位于中轨（${boll.middle.toFixed(2)}）${currentPrice > boll.middle ? '上方' : '下方'}，${currentPrice > boll.upper ? '突破上轨，看涨动能强劲' : currentPrice < boll.lower ? '跌破下轨，看跌动能强劲' : '震荡运行'}。`);
-        console.log(`RSI：RSI6（${rsi6.toFixed(2)}）${rsi6 > 70 ? '进入超买区间' : rsi6 < 30 ? '进入超卖区间' : '中性'}，RSI14（${rsi14.toFixed(2)}）中性偏低，短期存在技术性修复需求。`);
-        console.log(`KDJ：K（${kdj.k.toFixed(2)}）与D（${kdj.d.toFixed(2)}）${kdj.k > kdj.d ? '金叉' : '死叉'}，J（${kdj.j.toFixed(2)}）${kdj.j > 80 ? '超买' : kdj.j < 20 ? '超卖' : '中性'}。`);
-        
-        console.log(`\n资金与量价分析：`);
-        console.log(`资金费率：${fundingRate.toFixed(6)}%（${fundingRate > 0.01 ? '多头付费' : fundingRate < -0.01 ? '空头付费' : '中性'}）。`);
-        console.log(`成交量：${volumeAnalysis}`);
-        console.log(`K线形态：${candleAnalysis.text}`);
-
-        console.log(`\n--- 分析结果 ---`);
-        console.log(`综合信号评分：${signalScore.toFixed(2)}分`);
-        reversalAnalysis.signals.forEach(s => console.log(` - ${s}`));
-        console.log(`方向：${direction}`);
-        console.log(`入场时机：${entryStrategy}`);
-        
-        // 根据方向动态打印止损和目标价位
-        if (direction.includes('看涨') || direction.includes('震荡偏多')) {
-            console.log(`止损设定：止损位 ${pp.s3.toFixed(2)}，约${(Math.abs(currentPrice - pp.s3) / currentPrice * 100).toFixed(2)}%风险控制。`);
-            console.log(`目标价位：第一目标 ${pp.r1.toFixed(2)}，第二目标 ${pp.r2.toFixed(2)}。`);
-        } else if (direction.includes('看空') || direction.includes('震荡偏空')) {
-            console.log(`止损设定：止损位 ${pp.r3.toFixed(2)}，约${(Math.abs(currentPrice - pp.r3) / currentPrice * 100).toFixed(2)}%风险控制。`);
-            console.log(`目标价位：第一目标 ${pp.s1.toFixed(2)}，第二目标 ${pp.s2.toFixed(2)}。`);
-        } else {
-            console.log(`\n--- 详细交易策略（震荡行情） ---`);
-            console.log(`多头策略：`);
-            console.log(`  - 入场：价格有效突破R1 ${resistance1.toFixed(2)} 后考虑入场。`);
-            console.log(`  - 止损：设置在S1 ${support1.toFixed(2)} 附近。`);
-            console.log(`  - 目标：第一目标R2 ${resistance2.toFixed(2)}，第二目标R3 ${pp.r3.toFixed(2)}。`);
-            console.log(`空头策略：`);
-            console.log(`  - 入场：价格有效跌破S1 ${support1.toFixed(2)} 后考虑入场。`);
-            console.log(`  - 止损：设置在R1 ${resistance1.toFixed(2)} 附近。`);
-            console.log(`  - 目标：第一目标S2 ${support2.toFixed(2)}，第二目标S3 ${pp.s3.toFixed(2)}。`);
-        }
-        
-        console.log(`提示：本分析仅供参考，不构成任何投资建议！`);
-        
-        // 返回分析结果
-        resolve();
-        
-    } catch (error) {
-        console.error('在执行脚本时发生错误:', error.message);
-        reject(error);
-    }
-});
+    });
 }
 
-// 导出 runAnalysis 函数
-// module.exports = { runAnalysis };
 
-export default { runAnalysis };
 
-// 如果直接运行此文件，则执行分析
+// This allows the file to be run directly with node
 if (import.meta.url === `file://${process.argv[1]}`) {
-  // 从命令行参数获取交易对和时间周期
-  const symbol = process.argv[2] || 'BTCUSDT';
-  const interval = process.argv[3] || '15m';
-  
-  console.log(`开始分析 ${symbol} ${interval} 数据...`);
-  runAnalysis(symbol, interval).catch(console.error);
+    const symbol = process.argv[2] || 'BTCUSDT';
+    const interval = process.argv[3] || '15m';
+
+    console.log(`Starting analysis for ${symbol} ${interval}...`);
+    runAnalysis(symbol, interval).catch(console.error);
 }
