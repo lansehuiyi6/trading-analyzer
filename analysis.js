@@ -908,7 +908,7 @@ async function runAnalysis(symbol = 'BTCUSDT', interval = '15m') {
 export default { runAnalysis };
 
 // 如果直接运行此文件，则执行分析
-if (typeof window === 'undefined' && require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   // 从命令行参数获取交易对和时间周期
   const symbol = process.argv[2] || 'BTCUSDT';
   const interval = process.argv[3] || '15m';
