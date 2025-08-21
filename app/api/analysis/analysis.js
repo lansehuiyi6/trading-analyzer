@@ -867,7 +867,7 @@ async function runAnalysis(symbol = 'BTCUSDT', interval = '15m') {
 
         console.log(`\n--- 分析结果 ---`);
         console.log(`综合信号评分：${signalScore.toFixed(2)}分`);
-        reversalAnalysis.signals.forEach(s => console.log(` - ${s}`));
+        signals.forEach(s => console.log(` - ${s}`));
         console.log(`方向：${direction}`);
         console.log(`入场时机：${entryStrategy}`);
         
