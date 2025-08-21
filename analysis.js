@@ -903,7 +903,9 @@ async function runAnalysis(symbol = 'BTCUSDT', interval = '15m') {
 }
 
 // 导出 runAnalysis 函数
-module.exports = { runAnalysis };
+// module.exports = { runAnalysis };
+
+export default { runAnalysis };
 
 // 如果直接运行此文件，则执行分析
 if (typeof window === 'undefined' && require.main === module) {
