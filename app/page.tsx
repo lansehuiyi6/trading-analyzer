@@ -97,7 +97,7 @@ export default function TradingAnalysis() {
     setShowAddPair(false);
   };
 
-  const executeAnalysis = async (pair: string, timeframe: string) => {
+  const executeAnalysis = async () => {
     setIsAnalyzing(true);
     
     try {
@@ -107,9 +107,12 @@ export default function TradingAnalysis() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ pair, timeframe }),
+        body: JSON.stringify({
+          pair: selectedPair,
+          timeframe: selectedTimeframe,
+        }),
       });
-      
+
       const data = await response.json();
       
       if (!response.ok) {
@@ -117,8 +120,8 @@ export default function TradingAnalysis() {
         let errorMessage = data.error || 'API请求失败';
         if (data.message) {
           errorMessage += `: ${data.message}`;
-      }
-      
+        }
+        
         // 如果有日志，添加到错误信息中
         if (Array.isArray(data.logs) && data.logs.length > 0) {
           errorMessage += '\n\n分析日志：\n' + data.logs.join('\n');
@@ -145,7 +148,7 @@ export default function TradingAnalysis() {
         status: 'success',
         rawData: data
       };
-      
+            
       setAnalysisResults(prev => [result, ...prev]);
       return result;
     } catch (error) {
@@ -177,6 +180,7 @@ export default function TradingAnalysis() {
       
       setAnalysisResults(prev => [errorResult, ...prev]);
       return errorResult;
+      setAnalysisResults(prev => [errorResult, ...prev]);
     } finally {
       setIsAnalyzing(false);
     }
@@ -268,7 +272,7 @@ export default function TradingAnalysis() {
             <div className="space-y-3">
               <label className="block text-sm font-medium text-white">执行分析</label>
               <button
-                onClick={() => executeAnalysis(selectedPair, selectedTimeframe)}
+                onClick={executeAnalysis}
                 disabled={isAnalyzing}
                 className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 disabled:from-gray-400 disabled:to-gray-500 text-white font-medium py-3 px-6 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 disabled:cursor-not-allowed"
               >
